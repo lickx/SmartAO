@@ -1,7 +1,7 @@
 
 /*
-   SmartAO
-   2021-01-04 - lickx / Okie Meow
+   SmartAO by lickx
+   2021-04-24
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -13,8 +13,8 @@
      Flying
      FlyingSlow
      Hovering
-     Hovering Down
-     Hovering Up
+     Hovering Down (sometimes called Flying Down)
+     Hovering Up (sometimes called Flying Up)
      Jumping
      Landing
      PreJumping
@@ -25,25 +25,32 @@
      Standing Up
      Striding
      Soft Landing
-     Swimming
+     Swimming (sometimes called Swimming Forward)
      Swimming Down
      Swimming Up
      Taking Off
      Turning Left
      Turning Right
-     Walking
+     Walking (see note below)
 
-   You can have one or more standing animations as long as they are
-   prefixed with "Standing".
+   There can be one or more standing animations as long as they are
+   prefixed with "Standing". They can be random or sequential (see menu).
 
+   The same goes for walking animations, as long as they are prefixed
+   with "Walking". Walks change randomly on g_iStandTime intervals.
+   
+   Using "Test Walks" you can choose which walks to keep or else delete.
+   While in this mode, the same buttons are used as for Stands.
+   
    The water resistance (=slower movement) only works with ubODE physics.
    When starting to float (press home when standing on the seafloor), give
    it 3 seconds before swimming (press forward), otherwise you'll fly out
-   of the water.
+   of the water. This differs from SL physics.
 
  */
 
-list g_lAnimStanding; // list of stands (animations with name starting with "Standing")
+list g_lAnimWalking;
+integer g_iCurrentWalk = 0;
 
 integer g_iHaveSwimAnims; // bitfield of swimming anims we have: swimming, floating, swim down, swim up
 integer g_iUsingSwimAnims; // do we have swim anims activated instead of flying anims?
@@ -51,7 +58,8 @@ float g_fWaterLevel;
 
 integer g_iHaveFlyAnims;
 
-integer g_iStandTime = 45;      // stand time in seconds
+list g_lAnimStanding; // list of stands (animations with name starting with "Standing")
+integer g_iStandTime = 120;      // stand time in seconds
 integer g_iRandomStands = TRUE; // TRUE=random, FALSE=sequential
 integer g_iNextStandStart;
 integer g_iCurrentStand;
@@ -59,6 +67,7 @@ integer g_iCurrentStand;
 integer g_iEnabled = TRUE;
 integer g_iSitAnywhere = FALSE;
 integer g_iMenuOpened;
+integer g_iHeightAdjusted = FALSE;
 
 integer LOCKMEISTER_CH = -8888;
 integer g_iLMHandle;
@@ -70,6 +79,13 @@ float HOVER_INCREMENT = 0.05;
 
 integer g_iDialogHandle;
 integer g_iDialogChannel;
+
+string g_sTexture;
+
+integer g_iHoverInfo = FALSE;
+integer g_iTestingWalks = FALSE;
+
+string g_sFileToDelete;
 
 Swim2Fly()
 {
@@ -99,17 +115,16 @@ Fly2Swim()
 
 NextStand()
 {
+    integer iNumStands = llGetListLength(g_lAnimStanding);
     if (g_iRandomStands) {
-        integer iNumStands = llGetListLength(g_lAnimStanding);
-        g_iCurrentStand = (integer)llFrand(iNumStands-1);
+        g_iCurrentStand = llRound(llFrand(iNumStands-1));
     } else {
-        integer iNumStands = llGetListLength(g_lAnimStanding);
         if (g_iCurrentStand < iNumStands-1) g_iCurrentStand++;
         else g_iCurrentStand = 0;
     }
     string sAnim = llList2String(g_lAnimStanding, g_iCurrentStand);
     llSetAnimationOverride("Standing",sAnim);
-    g_iNextStandStart = llGetUnixTime() + g_iStandTime;
+    PickWalk();
 }
 
 PrevStand()
@@ -123,7 +138,25 @@ PrevStand()
     else g_iCurrentStand = iNumStands-1;
     string sAnim = llList2String(g_lAnimStanding, g_iCurrentStand);
     llSetAnimationOverride("Standing",sAnim);
-    g_iNextStandStart = llGetUnixTime() + g_iStandTime;
+    PickWalk();
+}
+
+PrevTestWalk()
+{
+    integer iNumWalks = llGetListLength(g_lAnimWalking);
+    if (g_iCurrentWalk > 0) g_iCurrentWalk--;
+    else g_iCurrentWalk = iNumWalks-1;
+    string sAnim = llList2String(g_lAnimWalking, g_iCurrentWalk);
+    llSetAnimationOverride("Standing",sAnim);
+}
+
+NextTestWalk()
+{
+    integer iNumWalks = llGetListLength(g_lAnimWalking);
+    if (g_iCurrentWalk < iNumWalks-1) g_iCurrentWalk++;
+    else g_iCurrentWalk = 0;
+    string sAnim = llList2String(g_lAnimWalking, g_iCurrentWalk);
+    llSetAnimationOverride("Standing",sAnim);
 }
 
 Enable()
@@ -132,16 +165,18 @@ Enable()
         "FlyingSlow", "Hovering", "Hovering Down", "Hovering Up", "Jumping",
         "Landing", "PreJumping", "Running", "Sitting", "Sitting on Ground",
         "Standing Up", "Striding", "Soft Landing", "Taking Off", "Turning Left",
-        "Turning Right", "Walking"];
-    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_TEXTURE, 0, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0.5,0>, 0]);
+        "Turning Right"];
+    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_TEXTURE, 0, g_sTexture, <1,1,0>, <0,0.5,0>, 0]);
     llResetAnimationOverride("ALL");
     g_lAnimStanding = [];
+    g_lAnimWalking = [];
     g_iHaveFlyAnims = 0;
     g_iHaveSwimAnims = 0;
     integer i = 0;
     while (i < llGetInventoryNumber(INVENTORY_ANIMATION)) {
         string sAnim = llGetInventoryName(INVENTORY_ANIMATION, i++);
         if ((~llSubStringIndex(sAnim, "Standing")) && sAnim != "Standing Up") g_lAnimStanding += sAnim;
+        if ((~llSubStringIndex(sAnim, "Walking")) && sAnim != "CrouchWalking") g_lAnimWalking += sAnim;
         else if (sAnim == "Flying") g_iHaveFlyAnims = g_iHaveFlyAnims | 1;
         else if (sAnim == "Hovering") g_iHaveFlyAnims = g_iHaveFlyAnims | 2;
         else if (sAnim == "Hovering Down") g_iHaveFlyAnims = g_iHaveFlyAnims | 4;
@@ -154,16 +189,14 @@ Enable()
     }
     Swim2Fly();
     NextStand();
-    // Only use the timer if we have more than 1 stand:
-    if (llGetListLength(g_lAnimStanding) > 1) llSetTimerEvent(g_iStandTime);
-    else llSetTimerEvent(0.0);
+    if (llGetListLength(g_lAnimWalking)) llSetAnimationOverride("Walking", llList2String(g_lAnimWalking, 0));
     g_iEnabled = TRUE;
     VALID_ANIMS = []; // maybe needed for yEngine, free up list memory.
 }
 
 Disable()
 {
-    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_TEXTURE, 0, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0,0>, 0]);
+    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_TEXTURE, 0, g_sTexture, <1,1,0>, <0,0,0>, 0]);
     llSetTimerEvent(0.0);
     llResetAnimationOverride("ALL");
     g_iEnabled = FALSE;
@@ -180,33 +213,39 @@ HideMenu()
 
 ShowStandMenu()
 {
-    llOwnerSay("@adjustheight:1;0;0=force");
+    if (g_iHeightAdjusted) llOwnerSay("@adjustheight:1;0;0=force");
     llSetLinkPrimitiveParamsFast(LINK_THIS, [
-        PRIM_TEXTURE, 1, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0,0>, 0,
-        PRIM_TEXTURE, 4, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0,0>, 0,
-        PRIM_TEXTURE, 5, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0,0>, 0,
-        PRIM_TEXTURE, 6, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0,0>, 0
+        PRIM_TEXTURE, 1, g_sTexture, <1,1,0>, <0,0,0>, 0,
+        PRIM_TEXTURE, 4, g_sTexture, <1,1,0>, <0,0,0>, 0,
+        PRIM_TEXTURE, 5, g_sTexture, <1,1,0>, <0,0,0>, 0,
+        PRIM_TEXTURE, 6, g_sTexture, <1,1,0>, <0,0,0>, 0
     ]);
+    if (g_iHoverInfo) {
+        if (!g_iTestingWalks) llSetText(llList2String(g_lAnimStanding, g_iCurrentStand), <1,1,1>, 1);
+        else llSetText("Test walk: "+llList2String(g_lAnimWalking, g_iCurrentWalk), <1,1,1>, 1);
+    }
 }
 
 ShowGroundsitMenu()
 {
     llOwnerSay("@adjustheight:1;0;"+(string)g_fHover+"=force");
     llSetLinkPrimitiveParamsFast(LINK_THIS, [
-        PRIM_TEXTURE, 1, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0.5,0>, 0,
-        PRIM_TEXTURE, 4, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0.5,0>, 0,
-        PRIM_TEXTURE, 5, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0.5,0>, 0,
-        PRIM_TEXTURE, 6, llGetInventoryName(INVENTORY_TEXTURE, 0), <1,1,0>, <0,0.5,0>, 0
+        PRIM_TEXTURE, 1, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
+        PRIM_TEXTURE, 4, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
+        PRIM_TEXTURE, 5, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
+        PRIM_TEXTURE, 6, g_sTexture, <1,1,0>, <0,0.5,0>, 0
     ]);
+    if (g_iHoverInfo) llSetText((string)g_fHover, <1,1,1>, 1);
+    g_iHeightAdjusted = TRUE;
 }
 
-DeleteDialog()
+DeleteDialog(string sFile)
 {
     llSetTimerEvent(0.0);
-    string sAnim = llList2String(g_lAnimStanding, g_iCurrentStand);
+    g_sFileToDelete = sFile;
     g_iDialogChannel = -393939;
     g_iDialogHandle = llListen(g_iDialogChannel, "", "", "");
-    llDialog(llGetOwner(), "Delete stand '"+sAnim+"'?", ["Confirm", "Cancel"], g_iDialogChannel);
+    llDialog(llGetOwner(), "Delete stand '"+g_sFileToDelete+"'?", ["Delete", "Cancel"], g_iDialogChannel);
 }
 
 OptionDialog()
@@ -214,11 +253,16 @@ OptionDialog()
     g_iDialogChannel = -393939;
     g_iDialogHandle = llListen(g_iDialogChannel, "", "", "");
     list lButtons;
+    if (g_iTestingWalks) lButtons += "☑ Test Walks";
+    else lButtons += "☐ Test Walks";
+    lButtons += "Reload";
+    lButtons += "Close";
     if (g_iRandomStands) lButtons += "☑ Random";
     else lButtons += "☐ Random";
     if (g_iEnableLM) lButtons += "☑ Lockmeister";
     else lButtons += "☐ Lockmeister";
-    lButtons += "Close";
+    if (g_iHoverInfo) lButtons += "☑ Hover Info";
+    else lButtons += "☐ Hover Info";
     lButtons += ["15 sec.", "30 sec.", "45 sec."];
     llDialog(llGetOwner(), "SmartAO Options", lButtons, g_iDialogChannel);
 }
@@ -233,6 +277,8 @@ RestoreSettings()
         if (sSetting == "hover") g_fHover = llList2Float(lSettings, i+1);
         else if (sSetting == "random") g_iRandomStands = llList2Integer(lSettings, i+1);
         else if (sSetting == "standtime") g_iStandTime = llList2Integer(lSettings, i+1);
+        else if (sSetting == "info") g_iHoverInfo = llList2Integer(lSettings, i+1);
+        else if (sSetting == "lm") g_iEnableLM = llList2Integer(lSettings, i+1);
     }
 }
 
@@ -242,13 +288,27 @@ SaveSettings()
     sSettings += "hover="+(string)g_fHover;
     sSettings += ",random="+(string)g_iRandomStands;
     sSettings += ",standtime="+(string)g_iStandTime;
+    sSettings += ",info="+(string)g_iHoverInfo;
+    sSettings += ",lm="+(string)g_iEnableLM;
     llSetObjectDesc(sSettings);
+}
+
+PickWalk()
+{
+    // Set up next walk
+    if (llGetListLength(g_lAnimWalking) > 1) {
+        integer iWalk = (integer)llFrand(llGetListLength(g_lAnimWalking));
+        string sNextWalk = llList2String(g_lAnimWalking, iWalk);
+        llSetAnimationOverride("Walking", sNextWalk);
+    }
 }
 
 default
 {
     state_entry()
     {
+        g_sTexture = llGetInventoryName(INVENTORY_TEXTURE, 0);
+        llSetTexture(g_sTexture, ALL_SIDES);
         g_fWaterLevel = llWater(ZERO_VECTOR);
         RestoreSettings();
         if (llGetAttached()) llRequestPermissions(llGetOwner(), PERMISSION_OVERRIDE_ANIMATIONS | PERMISSION_TAKE_CONTROLS);
@@ -278,34 +338,39 @@ default
             // Groundsit
             g_iSitAnywhere = !g_iSitAnywhere;
             if (g_iSitAnywhere) {
-                if (llGetInventoryType("Sitting on Ground")!=INVENTORY_ANIMATION) return;
                 llSetTimerEvent(0.0);
+                if (llGetInventoryType("Sitting on Ground")!=INVENTORY_ANIMATION) return;
                 llSetAnimationOverride("Standing", "Sitting on Ground");
-                ShowGroundsitMenu();
+                // For future viewers this is possible instead:
+                //llOwnerSay("@sitground=force");
             } else {
                 NextStand();
                 llSetTimerEvent(g_iStandTime);
-                ShowStandMenu();
             }
         } else if (iButton == 2) OptionDialog();
         else if (iButton == 4) {
-            if (sAnim == "Standing" && !g_iSitAnywhere) PrevStand();
+            if (g_iTestingWalks) PrevTestWalk();
+            else if (sAnim == "Standing" && !g_iSitAnywhere) PrevStand();
             else if (sAnim == "Sitting on Ground" || g_iSitAnywhere) {
                 // Adjust groundsit height upwards
                 g_fHover+=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fHover+"=force");
+                if (g_iHoverInfo) llSetText((string)g_fHover, <1,1,1>, 1);
                 SaveSettings();
             }
         } else if (iButton == 5) {
-            if (sAnim == "Standing" && !g_iSitAnywhere) NextStand();
+            if (g_iTestingWalks) NextTestWalk();
+            else if (sAnim == "Standing" && !g_iSitAnywhere) NextStand();
             else if (sAnim == "Sitting on Ground" || g_iSitAnywhere) {
                 // Adjust groundsit height downwards
                 g_fHover-=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fHover+"=force");
+                if (g_iHoverInfo) llSetText((string)g_fHover, <1,1,1>, 1);
                 SaveSettings();
             }
         } else if (iButton == 6) {
-            if (sAnim == "Standing" && !g_iSitAnywhere) DeleteDialog();
+            if (g_iTestingWalks) DeleteDialog(llList2String(g_lAnimWalking, g_iCurrentWalk));
+            else if (sAnim == "Standing" && !g_iSitAnywhere) DeleteDialog(llList2String(g_lAnimStanding, g_iCurrentStand));
             else if (sAnim == "Sitting on Ground" || g_iSitAnywhere) {
                 // Reset groundsit height
                 g_fHover=0;
@@ -318,27 +383,50 @@ default
     listen(integer iChannel, string sName, key kID, string sMsg)
     {
         if (iChannel == g_iDialogChannel) {
-            if (sMsg == "Confirm") {
-                string sAnim = llList2String(g_lAnimStanding, g_iCurrentStand);
-                llRemoveInventory(sAnim);
-                llDeleteSubList(g_lAnimStanding, g_iCurrentStand, g_iCurrentStand);
-                NextStand();
+            if (sMsg == "Delete") {
+                if (g_iTestingWalks) {
+                    integer idx = llListFindList(g_lAnimWalking, [g_sFileToDelete]);
+                    if (~idx) llDeleteSubList(g_lAnimWalking, idx, idx);
+                    llRemoveInventory(g_sFileToDelete);
+                    NextTestWalk();
+                } else {
+                    // stands
+                    integer idx = llListFindList(g_lAnimStanding, [g_sFileToDelete]);
+                    if (~idx) llDeleteSubList(g_lAnimStanding, idx, idx);
+                    llRemoveInventory(g_sFileToDelete);
+                    NextStand();
+                }
+            } else if (sMsg == "Reload") {
+                llResetScript();
             } else if (sMsg == "☑ Random") {
-                g_iRandomStands = TRUE;
-                NextStand();
-            } else if (sMsg == "☐ Random") {
                 g_iRandomStands = FALSE;
                 NextStand();
+            } else if (sMsg == "☐ Random") {
+                g_iRandomStands = TRUE;
+                NextStand();
             } else if (sMsg == "☑ Lockmeister") {
-                g_iEnableLM = TRUE;
-                llListen(LOCKMEISTER_CH, "", "", "");
-            } else if (sMsg == "☐ Lockmeister") {
                 g_iEnableLM = FALSE;
                 llListenRemove(g_iLMHandle);
+            } else if (sMsg == "☐ Lockmeister") {
+                g_iEnableLM = TRUE;
+                llListen(LOCKMEISTER_CH, "", "", "");
+            } else if (sMsg == "☑ Hover Info") {
+                g_iHoverInfo = FALSE;
+                llSetText("", <1,1,1>, 1);
+            } else if (sMsg == "☐ Hover Info") {
+                g_iHoverInfo = TRUE;
+            } else if (sMsg == "☑ Test Walks") {
+                g_iTestingWalks = FALSE;
+                NextStand();
+            } else if (sMsg == "☐ Test Walks") {
+                g_iTestingWalks = TRUE;
+                llSetTimerEvent(0.0);
+                NextTestWalk();
             } else if (sMsg == "15 secs." || sMsg == "30 secs." || sMsg == "45 secs.") {
                 g_iStandTime = (integer)llGetSubString(sMsg, 0, 1);
                 NextStand();
             }
+            SaveSettings();
             llListenRemove(g_iDialogHandle);
             llSetTimerEvent(g_iStandTime);
         } else if (iChannel == LOCKMEISTER_CH) {
@@ -385,29 +473,44 @@ default
 
     changed(integer iChange)
     {
-        if (iChange & CHANGED_INVENTORY) llResetScript();
+        //if (iChange & CHANGED_INVENTORY) llResetScript();
         if (iChange & CHANGED_REGION || iChange & CHANGED_TELEPORT) {
             g_fWaterLevel = llWater(ZERO_VECTOR);
             if (!(llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS)) llRequestPermissions(llGetOwner(), PERMISSION_OVERRIDE_ANIMATIONS);
             if (!(llGetPermissions() & PERMISSION_TAKE_CONTROLS)) llRequestPermissions(llGetOwner(), PERMISSION_TAKE_CONTROLS);
         }
-        if (iChange & CHANGED_ANIMATION) {
+        if (g_iEnabled && (iChange & CHANGED_ANIMATION)) {
+            // Note: never call llSetAnimationOverride in the changed event
+            // or you'll get a recursive lag loop=crash
             string sAnim = llGetAnimation(llGetOwner());
             if (sAnim == "Sitting on Ground") ShowGroundsitMenu();
             else if (sAnim == "Standing") {
-                if (g_iSitAnywhere) ShowGroundsitMenu();
-                else ShowStandMenu();
-            } else HideMenu();
+                if (g_iTestingWalks) {
+                    ShowStandMenu();
+                } else if (g_iSitAnywhere) {
+                    ShowGroundsitMenu();
+                    // don't schedule next stand while sitting on ground
+                    llSetTimerEvent(0.0);
+                } else {
+                    ShowStandMenu();
+                    if (llGetListLength(g_lAnimStanding) > 1) {
+                        g_iNextStandStart = llGetUnixTime() + g_iStandTime;
+                        llSetTimerEvent(g_iStandTime);
+                    }
+                }
+            } else {
+                llSetText("", <1,1,1>, 1);
+                HideMenu();
+                // don't schedule next stand while not standing
+                llSetTimerEvent(0.0);
+            }
         }
     }
 
     timer()
     {
-        llSetTimerEvent(0.0);
-        
+        PickWalk();  //because we will call this from the arrows too...
         // Switch stands after g_iStandTime seconds
         if (llGetUnixTime() >= g_iNextStandStart) NextStand();
-
-        llSetTimerEvent(g_iStandTime);
     }
 }
