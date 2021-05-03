@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-04-24
+   2021-05-03
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -391,7 +391,6 @@ default
     listen(integer iChannel, string sName, key kID, string sMsg)
     {
         if (iChannel == RLV_CHANNEL) {
-            llOwnerSay(sMsg);
             g_iRlvOn = TRUE;
             llListenRemove(g_iRlvHandle);
             g_iRlvHandle = 0;
