@@ -52,6 +52,11 @@
 list g_lAnimWalking;
 integer g_iCurrentWalk = 0;
 
+integer g_iRlvOn = 0;
+integer g_iRlvHandle;
+integer RLV_CHANNEL = 5050;
+integer g_iRlvTimeout = 0;
+
 integer g_iHaveSwimAnims; // bitfield of swimming anims we have: swimming, floating, swim down, swim up
 integer g_iUsingSwimAnims; // do we have swim anims activated instead of flying anims?
 float g_fWaterLevel;
@@ -213,7 +218,7 @@ HideMenu()
 
 ShowStandMenu()
 {
-    if (g_iHeightAdjusted) llOwnerSay("@adjustheight:1;0;0=force");
+    if (g_iRlvOn && g_iHeightAdjusted) llOwnerSay("@adjustheight:1;0;0=force");
     llSetLinkPrimitiveParamsFast(LINK_THIS, [
         PRIM_TEXTURE, 1, g_sTexture, <1,1,0>, <0,0,0>, 0,
         PRIM_TEXTURE, 4, g_sTexture, <1,1,0>, <0,0,0>, 0,
@@ -228,7 +233,7 @@ ShowStandMenu()
 
 ShowGroundsitMenu()
 {
-    llOwnerSay("@adjustheight:1;0;"+(string)g_fHover+"=force");
+    if (g_iRlvOn) llOwnerSay("@adjustheight:1;0;"+(string)g_fHover+"=force");
     llSetLinkPrimitiveParamsFast(LINK_THIS, [
         PRIM_TEXTURE, 1, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
         PRIM_TEXTURE, 4, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
@@ -315,6 +320,9 @@ default
         g_iOpenCollar_CH = -llAbs((integer)("0x" + llGetSubString(llGetOwner(),30,-1)));
         llListen(g_iOpenCollar_CH, "", "", "");
         if (g_iEnableLM) g_iLMHandle = llListen(LOCKMEISTER_CH, "", "", "");
+        g_iRlvHandle = llListen(RLV_CHANNEL, "", llGetOwner(), "");
+        g_iRlvTimeout = llGetUnixTime() + 60;
+        llOwnerSay("@versionnew="+(string)RLV_CHANNEL);
     }
     
     attach(key kID)
@@ -351,7 +359,7 @@ default
         else if (iButton == 4) {
             if (g_iTestingWalks) PrevTestWalk();
             else if (sAnim == "Standing" && !g_iSitAnywhere) PrevStand();
-            else if (sAnim == "Sitting on Ground" || g_iSitAnywhere) {
+            else if (g_iRlvOn && (sAnim == "Sitting on Ground" || g_iSitAnywhere)) {
                 // Adjust groundsit height upwards
                 g_fHover+=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fHover+"=force");
@@ -361,7 +369,7 @@ default
         } else if (iButton == 5) {
             if (g_iTestingWalks) NextTestWalk();
             else if (sAnim == "Standing" && !g_iSitAnywhere) NextStand();
-            else if (sAnim == "Sitting on Ground" || g_iSitAnywhere) {
+            else if (g_iRlvOn && (sAnim == "Sitting on Ground" || g_iSitAnywhere)) {
                 // Adjust groundsit height downwards
                 g_fHover-=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fHover+"=force");
@@ -371,7 +379,7 @@ default
         } else if (iButton == 6) {
             if (g_iTestingWalks) DeleteDialog(llList2String(g_lAnimWalking, g_iCurrentWalk));
             else if (sAnim == "Standing" && !g_iSitAnywhere) DeleteDialog(llList2String(g_lAnimStanding, g_iCurrentStand));
-            else if (sAnim == "Sitting on Ground" || g_iSitAnywhere) {
+            else if (g_iRlvOn && (sAnim == "Sitting on Ground" || g_iSitAnywhere)) {
                 // Reset groundsit height
                 g_fHover=0;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fHover+"=force");
@@ -382,7 +390,13 @@ default
     
     listen(integer iChannel, string sName, key kID, string sMsg)
     {
-        if (iChannel == g_iDialogChannel) {
+        if (iChannel == RLV_CHANNEL) {
+            llOwnerSay(sMsg);
+            g_iRlvOn = TRUE;
+            llListenRemove(g_iRlvHandle);
+            g_iRlvHandle = 0;
+            g_iRlvTimeout = 0;
+        } else if (iChannel == g_iDialogChannel) {
             if (sMsg == "Delete") {
                 if (g_iTestingWalks) {
                     integer idx = llListFindList(g_lAnimWalking, [g_sFileToDelete]);
@@ -512,5 +526,13 @@ default
         PickWalk();  //because we will call this from the arrows too...
         // Switch stands after g_iStandTime seconds
         if (llGetUnixTime() >= g_iNextStandStart) NextStand();
+        if (g_iRlvTimeout) {
+            if (llGetUnixTime() >= g_iRlvTimeout) {
+                g_iRlvTimeout = 0;
+                g_iRlvOn = FALSE;
+                llListenRemove(g_iRlvHandle);
+                llOwnerSay("No RLV detected, some features will be limited");
+            } else llOwnerSay("@versionnew="+(string)RLV_CHANNEL);
+        }
     }
 }
