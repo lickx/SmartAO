@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-05-03
+   2021-05-07
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -399,13 +399,13 @@ default
             if (sMsg == "Delete") {
                 if (g_iTestingWalks) {
                     integer idx = llListFindList(g_lAnimWalking, [g_sFileToDelete]);
-                    if (~idx) llDeleteSubList(g_lAnimWalking, idx, idx);
+                    if (~idx) g_lAnimWalking = llDeleteSubList(g_lAnimWalking, idx, idx);
                     llRemoveInventory(g_sFileToDelete);
                     NextTestWalk();
                 } else {
                     // stands
                     integer idx = llListFindList(g_lAnimStanding, [g_sFileToDelete]);
-                    if (~idx) llDeleteSubList(g_lAnimStanding, idx, idx);
+                    if (~idx) g_lAnimStanding = llDeleteSubList(g_lAnimStanding, idx, idx);
                     llRemoveInventory(g_sFileToDelete);
                     NextStand();
                 }
