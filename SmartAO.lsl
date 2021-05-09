@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-05-07
+   2021-05-09
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -249,14 +249,14 @@ DeleteDialog(string sFile)
     llSetTimerEvent(0.0);
     g_sFileToDelete = sFile;
     g_iDialogChannel = -393939;
-    g_iDialogHandle = llListen(g_iDialogChannel, "", "", "");
+    g_iDialogHandle = llListen(g_iDialogChannel, "", llGetOwner(), "");
     llDialog(llGetOwner(), "Delete stand '"+g_sFileToDelete+"'?", ["Delete", "Cancel"], g_iDialogChannel);
 }
 
 OptionDialog()
 {
     g_iDialogChannel = -393939;
-    g_iDialogHandle = llListen(g_iDialogChannel, "", "", "");
+    g_iDialogHandle = llListen(g_iDialogChannel, "", llGetOwner(), "");
     list lButtons;
     if (g_iTestingWalks) lButtons += "☑ Test Walks";
     else lButtons += "☐ Test Walks";
