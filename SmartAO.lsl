@@ -253,6 +253,15 @@ DeleteDialog(string sFile)
     llDialog(llGetOwner(), "Delete stand '"+g_sFileToDelete+"'?", ["Delete", "Cancel"], g_iDialogChannel);
 }
 
+DeleteAnim(string sFile)
+{
+    integer iOwnerPerms = llGetInventoryPermMask(sFile, MASK_OWNER);
+    if (iOwnerPerms & PERM_COPY)
+        llRemoveInventory(sFile);
+    else
+        llGiveInventory(llGetOwner(), sFile);
+}
+
 OptionDialog()
 {
     g_iDialogChannel = -393939;
@@ -400,13 +409,13 @@ default
                 if (g_iTestingWalks) {
                     integer idx = llListFindList(g_lAnimWalking, [g_sFileToDelete]);
                     if (~idx) g_lAnimWalking = llDeleteSubList(g_lAnimWalking, idx, idx);
-                    llRemoveInventory(g_sFileToDelete);
+                    DeleteAnim(g_sFileToDelete);
                     NextTestWalk();
                 } else {
                     // stands
                     integer idx = llListFindList(g_lAnimStanding, [g_sFileToDelete]);
                     if (~idx) g_lAnimStanding = llDeleteSubList(g_lAnimStanding, idx, idx);
-                    llRemoveInventory(g_sFileToDelete);
+                    DeleteAnim(g_sFileToDelete);
                     NextStand();
                 }
             } else if (sMsg == "Reload") {
@@ -474,6 +483,7 @@ default
 
         if (!g_iUsingSwimAnims) Fly2Swim();
         string sCurAnim = llGetAnimation(llGetOwner());
+        if (sCurAnim=="Walking" || sCurAnim=="Running") return;
         vector vMove = ZERO_VECTOR;
         if ( iLevels & ~iEdges & CONTROL_FWD) vMove.x += 1.0;
         if ( iLevels & ~iEdges & CONTROL_BACK) vMove.x += -1.0;
