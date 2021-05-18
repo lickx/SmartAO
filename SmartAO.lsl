@@ -561,9 +561,12 @@ default
 
     timer()
     {
-        PickWalk();  //because we will call this from the arrows too...
         // Switch stands after g_iStandTime seconds
-        if (llGetUnixTime() >= g_iNextStandStart) NextStand();
+        if (llGetUnixTime() >= g_iNextStandStart &&
+                llGetAnimation(llGetOwner()) == "Standing") {
+            NextStand();
+            PickWalk();  //because we will call this from the arrows too...
+        }
         if (g_iRlvTimeout) {
             if (llGetUnixTime() >= g_iRlvTimeout) {
                 g_iRlvTimeout = 0;
