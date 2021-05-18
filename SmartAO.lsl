@@ -411,9 +411,13 @@ default
             else if (sAnim == "Standing" && !g_iSitAnywhere) DeleteDialog(llList2String(g_lAnimStanding, g_iCurrentStand));
             else if (g_iRlvOn && (sAnim == "Sitting on Ground" || g_iSitAnywhere)) {
                 // Reset groundsit height
-                g_fGroundsitHover=0;
+                g_fGroundsitHover=0.0;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
                 SaveSettings();
+            } else if (g_iRlvOn && sAnim == "Sitting") {
+                // Reset regular sit height
+                g_fSitHover = 0.0;
+                llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
             }
         }
     }
