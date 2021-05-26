@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-05-18
+   2021-05-24
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -90,7 +90,7 @@ string g_sTexture;
 integer g_iHoverInfo = FALSE;
 integer g_iTestingWalks = FALSE;
 
-string g_sFileToDelete;
+string g_sAnimToDelete;
 
 Swim2Fly()
 {
@@ -255,22 +255,22 @@ ShowSitMenu()
     if (g_iHoverInfo) llSetText((string)g_fSitHover, <1,1,1>, 1);
 }
 
-DeleteDialog(string sFile)
+DeleteDialog(string sAnim)
 {
     llSetTimerEvent(0.0);
-    g_sFileToDelete = sFile;
+    g_sAnimToDelete = sAnim;
     g_iDialogChannel = -393939;
     g_iDialogHandle = llListen(g_iDialogChannel, "", llGetOwner(), "");
-    llDialog(llGetOwner(), "Delete stand '"+g_sFileToDelete+"'?", ["Delete", "Cancel"], g_iDialogChannel);
+    llDialog(llGetOwner(), "Delete animation '"+g_sAnimToDelete+"'?", ["Delete", "Cancel"], g_iDialogChannel);
 }
 
-DeleteAnim(string sFile)
+DeleteAnim(string sAnim)
 {
-    integer iOwnerPerms = llGetInventoryPermMask(sFile, MASK_OWNER);
+    integer iOwnerPerms = llGetInventoryPermMask(sAnim, MASK_OWNER);
     if (iOwnerPerms & PERM_COPY)
-        llRemoveInventory(sFile);
+        llRemoveInventory(sAnim);
     else
-        llGiveInventory(llGetOwner(), sFile);
+        llGiveInventory(llGetOwner(), sAnim);
 }
 
 OptionDialog()
@@ -432,15 +432,15 @@ default
         } else if (iChannel == g_iDialogChannel) {
             if (sMsg == "Delete") {
                 if (g_iTestingWalks) {
-                    integer idx = llListFindList(g_lAnimWalking, [g_sFileToDelete]);
+                    integer idx = llListFindList(g_lAnimWalking, [g_sAnimToDelete]);
                     if (~idx) g_lAnimWalking = llDeleteSubList(g_lAnimWalking, idx, idx);
-                    DeleteAnim(g_sFileToDelete);
+                    DeleteAnim(g_sAnimToDelete);
                     NextTestWalk();
                 } else {
                     // stands
-                    integer idx = llListFindList(g_lAnimStanding, [g_sFileToDelete]);
+                    integer idx = llListFindList(g_lAnimStanding, [g_sAnimToDelete]);
                     if (~idx) g_lAnimStanding = llDeleteSubList(g_lAnimStanding, idx, idx);
-                    DeleteAnim(g_sFileToDelete);
+                    DeleteAnim(g_sAnimToDelete);
                     NextStand();
                 }
             } else if (sMsg == "Reload") {
