@@ -569,9 +569,9 @@ default
             } else if (sAnim == "Sitting") {
                 // Regular sit, reset hover everytime we sit on something new
                 g_fSitHover = 0.0;
-                if (g_iRlvOn && g_fSitHover != 0.0) {
+                if (g_iRlvOn && g_iHoverAdjusted) {
                     llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
-                    g_iHoverAdjusted = TRUE;
+                    g_iHoverAdjusted = FALSE;
                 }
                 if (g_iLastMenu != MENU_SIT) ShowSitMenu();
                 llSetTimerEvent(0.0);
