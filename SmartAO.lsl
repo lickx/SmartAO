@@ -231,6 +231,7 @@ HideMenu()
         PRIM_TEXTURE, 5, TEXTURE_TRANSPARENT, <1,1,0>, <0,0,0>, 0,
         PRIM_TEXTURE, 6, TEXTURE_TRANSPARENT, <1,1,0>, <0,0,0>, 0
     ]);
+    if (g_iHoverInfo) llSetText("", <1,1,1>, 1);
     g_iLastMenu = MENU_NONE;
 }
 
