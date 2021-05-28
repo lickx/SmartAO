@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-05-24
+   2021-05-28
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -64,7 +64,7 @@ float g_fWaterLevel;
 integer g_iHaveFlyAnims;
 
 list g_lAnimStanding; // list of stands (animations with name starting with "Standing")
-integer g_iStandTime = 120;      // stand time in seconds
+integer g_iStandTime = 30;      // stand time in seconds
 integer g_iRandomStands = TRUE; // TRUE=random, FALSE=sequential
 integer g_iNextStandStart;
 integer g_iCurrentStand;
@@ -81,6 +81,7 @@ integer g_iOpenCollar_CH;
 float g_fGroundsitHover = 0.0;
 float g_fSitHover = 0.0;
 float HOVER_INCREMENT = 0.05;
+integer g_iHoverAdjusted = FALSE;
 
 integer g_iDialogHandle;
 integer g_iDialogChannel;
@@ -91,6 +92,19 @@ integer g_iHoverInfo = FALSE;
 integer g_iTestingWalks = FALSE;
 
 string g_sAnimToDelete;
+
+integer g_iLastMenu = 0;
+integer MENU_NONE = 0;
+integer MENU_STAND = 1;
+integer MENU_GROUNDSIT = 2;
+integer MENU_SIT = 3;
+
+string Hover2String(float fHover)
+{
+    string sHover = (string)fHover;
+    if (llGetSubString(sHover, 0, 0) == "-") return llGetSubString(sHover, 0, 4);
+    else return llGetSubString(sHover, 0, 3);
+}
 
 Swim2Fly()
 {
@@ -194,6 +208,7 @@ Enable()
     }
     Swim2Fly();
     NextStand();
+    llSetTimerEvent(g_iStandTime);
     if (llGetListLength(g_lAnimWalking)) llSetAnimationOverride("Walking", llList2String(g_lAnimWalking, 0));
     g_iEnabled = TRUE;
     VALID_ANIMS = []; // maybe needed for yEngine, free up list memory.
@@ -214,11 +229,11 @@ HideMenu()
         PRIM_TEXTURE, 5, TEXTURE_TRANSPARENT, <1,1,0>, <0,0,0>, 0,
         PRIM_TEXTURE, 6, TEXTURE_TRANSPARENT, <1,1,0>, <0,0,0>, 0
     ]);
+    g_iLastMenu = MENU_NONE;
 }
 
 ShowStandMenu()
 {
-    if (g_iRlvOn) llOwnerSay("@adjustheight:1;0;0=force");
     llSetLinkPrimitiveParamsFast(LINK_THIS, [
         PRIM_TEXTURE, 1, g_sTexture, <1,1,0>, <0,0,0>, 0,
         PRIM_TEXTURE, 4, g_sTexture, <1,1,0>, <0,0,0>, 0,
@@ -229,30 +244,31 @@ ShowStandMenu()
         if (!g_iTestingWalks) llSetText(llList2String(g_lAnimStanding, g_iCurrentStand), <1,1,1>, 1);
         else llSetText("Test walk: "+llList2String(g_lAnimWalking, g_iCurrentWalk), <1,1,1>, 1);
     }
+    g_iLastMenu = MENU_STAND;
 }
 
 ShowGroundsitMenu()
 {
-    if (g_iRlvOn) llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
     llSetLinkPrimitiveParamsFast(LINK_THIS, [
         PRIM_TEXTURE, 1, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
         PRIM_TEXTURE, 4, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
         PRIM_TEXTURE, 5, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
         PRIM_TEXTURE, 6, g_sTexture, <1,1,0>, <0,0.5,0>, 0
     ]);
-    if (g_iHoverInfo) llSetText((string)g_fGroundsitHover, <1,1,1>, 1);
+    if (g_iHoverInfo) llSetText(Hover2String(g_fGroundsitHover), <1,1,1>, 1);
+    g_iLastMenu = MENU_GROUNDSIT;
 }
 
 ShowSitMenu()
 {
-    if (g_iRlvOn) llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
     llSetLinkPrimitiveParamsFast(LINK_THIS, [
         PRIM_TEXTURE, 1, g_sTexture, <1,1,0>, <0,0,0>, 0,
         PRIM_TEXTURE, 4, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
         PRIM_TEXTURE, 5, g_sTexture, <1,1,0>, <0,0.5,0>, 0,
         PRIM_TEXTURE, 6, g_sTexture, <1,1,0>, <0,0.5,0>, 0
     ]);
-    if (g_iHoverInfo) llSetText((string)g_fSitHover, <1,1,1>, 1);
+    if (g_iHoverInfo) llSetText(Hover2String(g_fSitHover), <1,1,1>, 1);
+    g_iLastMenu = MENU_SIT;
 }
 
 DeleteDialog(string sAnim)
@@ -363,15 +379,16 @@ default
             if (g_iEnabled) Enable();
             else Disable();
         } else if (iButton == 1) {
-            // Groundsit
             g_iSitAnywhere = !g_iSitAnywhere;
             if (g_iSitAnywhere) {
-                llSetTimerEvent(0.0);
                 if (llGetInventoryType("Sitting on Ground")!=INVENTORY_ANIMATION) return;
+                // Fake groundsit
+                llSetTimerEvent(0.0);
                 llSetAnimationOverride("Standing", "Sitting on Ground");
                 // For future viewers this is possible instead:
                 //llOwnerSay("@sitground=force");
             } else {
+                // stand up from fake groundsit
                 NextStand();
                 llSetTimerEvent(g_iStandTime);
             }
@@ -383,13 +400,17 @@ default
                 // Adjust groundsit height upwards
                 g_fGroundsitHover+=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
-                if (g_iHoverInfo) llSetText((string)g_fGroundsitHover, <1,1,1>, 1);
+                if (g_fGroundsitHover != 0.0) g_iHoverAdjusted = TRUE;
+                else g_iHoverAdjusted = FALSE;
+                if (g_iHoverInfo) llSetText(Hover2String(g_fGroundsitHover), <1,1,1>, 1);
                 SaveSettings();
             } else if (g_iRlvOn && sAnim == "Sitting") {
                 // Adjust regular sit height upwards
                 g_fSitHover+=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
-                if (g_iHoverInfo) llSetText((string)g_fSitHover, <1,1,1>, 1);
+                if (g_fSitHover != 0.0) g_iHoverAdjusted = TRUE;
+                else g_iHoverAdjusted = FALSE;
+                if (g_iHoverInfo) llSetText(Hover2String(g_fSitHover), <1,1,1>, 1);
             }
         } else if (iButton == 5) {
             if (g_iTestingWalks) NextTestWalk();
@@ -398,13 +419,17 @@ default
                 // Adjust groundsit height downwards
                 g_fGroundsitHover-=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
-                if (g_iHoverInfo) llSetText((string)g_fGroundsitHover, <1,1,1>, 1);
+                if (g_fGroundsitHover != 0.0) g_iHoverAdjusted = TRUE;
+                else g_iHoverAdjusted = FALSE;
+                if (g_iHoverInfo) llSetText(Hover2String(g_fGroundsitHover), <1,1,1>, 1);
                 SaveSettings();
             } else if (g_iRlvOn && sAnim == "Sitting") {
                 // Adjust regular sit height downwards
                 g_fSitHover-=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
-                if (g_iHoverInfo) llSetText((string)g_fSitHover, <1,1,1>, 1);
+                if (g_fSitHover != 0.0) g_iHoverAdjusted = TRUE;
+                else g_iHoverAdjusted = FALSE;
+                if (g_iHoverInfo) llSetText(Hover2String(g_fSitHover), <1,1,1>, 1);
             }
         } else if (iButton == 6) {
             if (g_iTestingWalks) DeleteDialog(llList2String(g_lAnimWalking, g_iCurrentWalk));
@@ -413,11 +438,13 @@ default
                 // Reset groundsit height
                 g_fGroundsitHover=0.0;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
+                g_iHoverAdjusted = FALSE;
                 SaveSettings();
             } else if (g_iRlvOn && sAnim == "Sitting") {
                 // Reset regular sit height
                 g_fSitHover = 0.0;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
+                g_iHoverAdjusted = FALSE;
             }
         }
     }
@@ -531,28 +558,60 @@ default
             // Note: never call llSetAnimationOverride in the changed event
             // or you'll get a recursive lag loop=crash
             string sAnim = llGetAnimation(llGetOwner());
-            if (sAnim == "Sitting on Ground") ShowGroundsitMenu();
-            else if (sAnim == "Sitting") {
-                // Reset hover everytime we sit on something new
+            if (sAnim == "Sitting on Ground") {
+                // Real groundsit
+                if (g_iRlvOn && g_fGroundsitHover != 0.0) {
+                    llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
+                    g_iHoverAdjusted = TRUE;
+                }
+                if (g_iLastMenu != MENU_GROUNDSIT) ShowGroundsitMenu();
+                llSetTimerEvent(0.0);
+            } else if (sAnim == "Sitting") {
+                // Regular sit, reset hover everytime we sit on something new
                 g_fSitHover = 0.0;
-                ShowSitMenu();
+                if (g_iRlvOn && g_fSitHover != 0.0) {
+                    llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
+                    g_iHoverAdjusted = TRUE;
+                }
+                if (g_iLastMenu != MENU_SIT) ShowSitMenu();
+                llSetTimerEvent(0.0);
             } else if (sAnim == "Standing") {
                 if (g_iTestingWalks) {
-                    ShowStandMenu();
-                } else if (g_iSitAnywhere) {
-                    ShowGroundsitMenu();
-                    // don't schedule next stand while sitting on ground
+                    // Testing walks
                     llSetTimerEvent(0.0);
+                    if (g_iRlvOn && g_iHoverAdjusted) {
+                        llOwnerSay("@adjustheight:1;0;0=force");
+                        g_iHoverAdjusted = FALSE;
+                    }
+                    if (g_iLastMenu != MENU_STAND) ShowStandMenu();
+                } else if (g_iSitAnywhere) {
+                    // Fake groundsit (actually playing the anim while standing)
+                    llSetTimerEvent(0.0);
+                    if (g_iRlvOn && g_fGroundsitHover != 0.0) {
+                        llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
+                        g_iHoverAdjusted = TRUE;
+                    }
+                    if (g_iLastMenu != MENU_GROUNDSIT) ShowGroundsitMenu();
                 } else {
-                    ShowStandMenu();
+                    // Regular stand
+                    if (g_iRlvOn && g_iHoverAdjusted) {
+                        llOwnerSay("@adjustheight:1;0;0=force");
+                        g_iHoverAdjusted = FALSE;
+                    }
+                    if (g_iLastMenu != MENU_STAND) ShowStandMenu();
                     if (llGetListLength(g_lAnimStanding) > 1) {
                         g_iNextStandStart = llGetUnixTime() + g_iStandTime;
                         llSetTimerEvent(g_iStandTime);
                     }
                 }
             } else {
-                llSetText("", <1,1,1>, 1);
-                HideMenu();
+                // All other anim states
+                if (g_iRlvOn && g_iHoverAdjusted) {
+                    llOwnerSay("@adjustheight:1;0;0=force");
+                    g_iHoverAdjusted = FALSE;
+                }
+                //llSetText("", <1,1,1>, 1);
+                if (g_iLastMenu != MENU_NONE) HideMenu();
                 // don't schedule next stand while not standing
                 llSetTimerEvent(0.0);
             }
