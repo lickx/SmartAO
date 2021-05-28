@@ -135,6 +135,7 @@ Fly2Swim()
 NextStand()
 {
     integer iNumStands = llGetListLength(g_lAnimStanding);
+    if (iNumStands <= 1) return;
     if (g_iRandomStands) {
         g_iCurrentStand = llRound(llFrand(iNumStands-1));
     } else {
@@ -148,11 +149,12 @@ NextStand()
 
 PrevStand()
 {
+    integer iNumStands = llGetListLength(g_lAnimStanding);
+    if (iNumStands <= 1) return;
     if (g_iRandomStands) {
         NextStand();
         return;
     }
-    integer iNumStands = llGetListLength(g_lAnimStanding);
     if (g_iCurrentStand > 0) g_iCurrentStand--;
     else g_iCurrentStand = iNumStands-1;
     string sAnim = llList2String(g_lAnimStanding, g_iCurrentStand);
@@ -326,7 +328,7 @@ RestoreSettings()
 SaveSettings()
 {
     string sSettings;
-    sSettings += "hover="+(string)g_fGroundsitHover;
+    sSettings += "hover="+Hover2String(g_fGroundsitHover);
     sSettings += ",random="+(string)g_iRandomStands;
     sSettings += ",standtime="+(string)g_iStandTime;
     sSettings += ",info="+(string)g_iHoverInfo;
