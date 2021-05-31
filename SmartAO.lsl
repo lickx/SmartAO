@@ -245,7 +245,7 @@ ShowStandMenu()
     ]);
     if (g_iHoverInfo) {
         if (!g_iTestingWalks) llSetText(llList2String(g_lAnimStanding, g_iCurrentStand), <1,1,1>, 1);
-        else llSetText("Test walk: "+llList2String(g_lAnimWalking, g_iCurrentWalk), <1,1,1>, 1);
+        else llSetText("(Testing walks)\n"+llList2String(g_lAnimWalking, g_iCurrentWalk), <1,1,1>, 1);
     }
     g_iLastMenu = MENU_STAND;
 }
@@ -388,12 +388,12 @@ default
                 // Fake groundsit
                 llSetTimerEvent(0.0);
                 llSetAnimationOverride("Standing", "Sitting on Ground");
-                // For future viewers this is possible instead:
+                // If all viewers conformed to RLV this would be possible instead:
                 //llOwnerSay("@sitground=force");
             } else {
-                // stand up from fake groundsit
+                // stand up from fake groundsit and re-enable timer
                 NextStand();
-                llSetTimerEvent(g_iStandTime);
+                if (llGetListLength(g_lStands) > 1) llSetTimerEvent(g_iStandTime);
             }
         } else if (iButton == 2) OptionDialog();
         else if (iButton == 4) {
@@ -469,9 +469,11 @@ default
                 } else {
                     // stands
                     integer idx = llListFindList(g_lAnimStanding, [g_sAnimToDelete]);
-                    if (~idx) g_lAnimStanding = llDeleteSubList(g_lAnimStanding, idx, idx);
-                    DeleteAnim(g_sAnimToDelete);
-                    NextStand();
+                    if (~idx) {
+                        g_lAnimStanding = llDeleteSubList(g_lAnimStanding, idx, idx);
+                        DeleteAnim(g_sAnimToDelete);
+                        NextStand();
+                    }
                 }
             } else if (sMsg == "Reload") {
                 llResetScript();
@@ -625,7 +627,8 @@ default
     {
         // Switch stands after g_iStandTime seconds
         if (llGetUnixTime() >= g_iNextStandStart &&
-                llGetAnimation(llGetOwner()) == "Standing") {
+                llGetAnimation(llGetOwner()) == "Standing" &&
+                !g_iSitAnywhere && !g_iTestingWalks) {
             NextStand();
             PickWalk();  //because we will call this from the arrows too...
         }

@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-05-24
+   2021-05-30
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -63,6 +63,7 @@ integer g_iOpenCollar_CH;
 float g_fGroundsitHover = 0.0;
 float g_fSitHover = 0.0;
 float HOVER_INCREMENT = 0.05;
+integer g_iHoverAdjusted = FALSE;
 
 integer g_iDialogHandle;
 integer g_iDialogChannel;
@@ -148,6 +149,7 @@ HideMenu()
         PRIM_TEXTURE, 6, TEXTURE_TRANSPARENT, <1,1,0>, <0,0,0>, 0
     ]);
     llSetText("", <1,1,1>, 1);
+    g_iLastMenu = MENU_STAND;
 }
 
 ShowGroundsitMenu()
@@ -159,6 +161,7 @@ ShowGroundsitMenu()
         PRIM_TEXTURE, 6, g_sTexture, <1,1,0>, <0,0.5,0>, 0
     ]);
     if (g_fGroundsitHover != 0.0) llSetText(Hover2String(g_fGroundsitHover), <1,1,1>, 1);
+    g_iLastMenu = MENU_GROUNDSIT;
 }
 
 ShowSitMenu()
@@ -170,6 +173,7 @@ ShowSitMenu()
         PRIM_TEXTURE, 6, g_sTexture, <1,1,0>, <0,0.5,0>, 0
     ]);
     if (g_fSitHover != 0.0) llSetText(Hover2String(g_fSitHover), <1,1,1>, 1);
+    g_iLastMenu = MENU_SIT;
 }
 
 OptionDialog()
@@ -177,10 +181,10 @@ OptionDialog()
     g_iDialogChannel = -393939;
     g_iDialogHandle = llListen(g_iDialogChannel, "", llGetOwner(), "");
     list lButtons;
-    lButtons += "Reload";
-    lButtons += "Close";
     if (g_iEnableLM) lButtons += "☑ Lockmeister";
     else lButtons += "☐ Lockmeister";
+    lButtons += "Reload";
+    lButtons += "Close";
     llDialog(llGetOwner(), "SmartAO Options", lButtons, g_iDialogChannel);
 }
 
@@ -191,7 +195,7 @@ RestoreSettings()
     for (i = 0; i < llGetListLength(lSettings); i+=2)
     {
         string sSetting = llList2String(lSettings, i);
-        if (sSetting == "gshover") g_fGroundsitHover = llList2Float(lSettings, i+1);
+        if (sSetting == "hover") g_fGroundsitHover = llList2Float(lSettings, i+1);
         else if (sSetting == "lm") g_iEnableLM = llList2Integer(lSettings, i+1);
     }
 }
@@ -199,7 +203,7 @@ RestoreSettings()
 SaveSettings()
 {
     string sSettings;
-    sSettings += "gshover="+(string)g_fGroundsitHover;
+    sSettings += "hover="+Hover2String(g_fGroundsitHover);
     sSettings += ",lm="+(string)g_iEnableLM;
     llSetObjectDesc(sSettings);
 }
@@ -239,28 +243,31 @@ default
             if (g_iEnabled) Enable();
             else Disable();
         } else if (iButton == 1) {
-            // Groundsit
             g_iSitAnywhere = !g_iSitAnywhere;
             if (g_iSitAnywhere) {
-                llSetTimerEvent(0.0);
                 if (llGetInventoryType("Sitting on Ground")!=INVENTORY_ANIMATION) return;
+                // Fake groundsit
                 llSetAnimationOverride("Standing", "Sitting on Ground");
                 llSetText(Hover2String(g_fGroundsitHover), <1,1,1>, 1);
-                // For future viewers this is possible instead:
+                // If all viewers conformed to RLV this would be possible instead:
                 //llOwnerSay("@sitground=force");
-            } else llSetAnimationOverride("Standing", "Standing");
+            } else llSetAnimationOverride("Standing", "Standing"); // stand up from fake groundsit
         } else if (iButton == 2) OptionDialog();
         else if (iButton == 4) {
             if (g_iRlvOn && (sAnim == "Sitting on Ground" || g_iSitAnywhere)) {
                 // Adjust groundsit height upwards
                 g_fGroundsitHover+=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
+                if (g_fGroundsitHover != 0.0) g_iHoverAdjusted = TRUE;
+                else g_iHoverAdjusted = FALSE;
                 llSetText(Hover2String(g_fGroundsitHover), <1,1,1>, 1);
                 SaveSettings();
             } else if (g_iRlvOn && sAnim == "Sitting") {
                 // Adjust regular sit height upwards
                 g_fSitHover+=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
+                if (g_fGroundsitHover != 0.0) g_iHoverAdjusted = TRUE;
+                else g_iHoverAdjusted = FALSE;
                 llSetText(Hover2String(g_fSitHover), <1,1,1>, 1);
             }
         } else if (iButton == 5) {
@@ -268,12 +275,16 @@ default
                 // Adjust groundsit height downwards
                 g_fGroundsitHover-=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
+                if (g_fGroundsitHover != 0.0) g_iHoverAdjusted = TRUE;
+                else g_iHoverAdjusted = FALSE;
                 llSetText(Hover2String(g_fGroundsitHover), <1,1,1>, 1);
                 SaveSettings();
             } else if (g_iRlvOn && sAnim == "Sitting") {
                 // Adjust regular sit height downwards
                 g_fSitHover-=HOVER_INCREMENT;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
+                if (g_fGroundsitHover != 0.0) g_iHoverAdjusted = TRUE;
+                else g_iHoverAdjusted = FALSE;
                 llSetText(Hover2String(g_fSitHover), <1,1,1>, 1);
             }
         } else if (iButton == 6) {
@@ -281,12 +292,14 @@ default
                 // Reset groundsit height
                 g_fGroundsitHover=0.0;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
+                g_iHoverAdjusted = FALSE;
                 llSetText(Hover2String(g_fGroundsitHover), <1,1,1>, 1);
                 SaveSettings();
             } else if (g_iRlvOn && sAnim == "Sitting") {
                 // Reset regular sit height
                 g_fSitHover = 0.0;
                 llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
+                g_iHoverAdjusted = FALSE;
                 llSetText(Hover2String(g_fSitHover), <1,1,1>, 1);
             }
         }
@@ -363,21 +376,40 @@ default
         }
         if (g_iEnabled && (iChange & CHANGED_ANIMATION)) {
             string sAnim = llGetAnimation(llGetOwner());
-            if (sAnim == "Sitting on Ground") ShowGroundsitMenu();
-            else if (sAnim == "Sitting") {
-                // Reset hover everytime we sit on something new
+            if (sAnim == "Sitting on Ground") {
+                // Real groundsit
+                if (g_iRlvOn && g_fGroundsitHover != 0.0) {
+                    llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
+                    g_iHoverAdjusted = TRUE;
+                }                
+                if (g_iLastMenu != MENU_GROUNDSIT) ShowGroundsitMenu();
+            } else if (sAnim == "Sitting") {
+                // Regular sit, reset hover everytime we sit on something new
                 g_fSitHover = 0.0;
-                if (g_iRlvOn) llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
-                ShowSitMenu();
-            } else if (sAnim == "Standing" && g_iSitAnywhere) {
-                if (g_iSitAnywhere) {
-                    if (g_iRlvOn) llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
-                    ShowGroundsitMenu();
-                } else {
-                    if (g_iRlvOn) llOwnerSay("@adjustheight:1;0;0.0=force");
-                    HideMenu();                    
+                if (g_iRlvOn && g_iHoverAdjusted) {
+                    llOwnerSay("@adjustheight:1;0;"+(string)g_fSitHover+"=force");
+                    g_iHoverAdjusted = FALSE;
                 }
-            } else HideMenu();
+                if (g_iLastMenu != MENU_SIT) ShowSitMenu();
+            } else if (sAnim == "Standing") {
+                if (g_iSitAnywhere) {
+                    // Fake groundsit (actually playing the anim while standing)
+                    if (g_iRlvOn && g_fGroundSitHover != 0.0) {
+                        llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
+                        g_iHoverAdjusted = TRUE;
+                    }
+                    if (g_iLastMenu != MENU_GROUNDSIT) ShowGroundsitMenu();
+                } else {
+                    // Regular stand
+                    if (g_iRlvOn && g_iHoverAdjusted) {
+                        llOwnerSay("@adjustheight:1;0;0.0=force");
+                        g_iHoverAdjusted = FALSE;
+                    }
+                    if (g_LastMenu != MENU_HIDE) HideMenu();
+                }
+            } else {
+                // All other anim states
+                if (g_iLastMenu != MENU_NONE) HideMenu();
         }
     }
 
