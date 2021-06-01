@@ -463,9 +463,11 @@ default
             if (sMsg == "Delete") {
                 if (g_iTestingWalks) {
                     integer idx = llListFindList(g_lAnimWalking, [g_sAnimToDelete]);
-                    if (~idx) g_lAnimWalking = llDeleteSubList(g_lAnimWalking, idx, idx);
-                    DeleteAnim(g_sAnimToDelete);
-                    NextTestWalk();
+                    if (~idx) {
+                        g_lAnimWalking = llDeleteSubList(g_lAnimWalking, idx, idx);
+                        DeleteAnim(g_sAnimToDelete);
+                        NextTestWalk();
+                    }
                 } else {
                     // stands
                     integer idx = llListFindList(g_lAnimStanding, [g_sAnimToDelete]);
