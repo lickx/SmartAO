@@ -1,7 +1,7 @@
 # SmartAO
 A next-gen animation override for OpenSim worlds
 
-##Features
+## Features
 * Fast, no polling, no dataserver
 * No notecard needed
 * Multiple stands and walks
@@ -15,9 +15,9 @@ A next-gen animation override for OpenSim worlds
 * Optimized, non-obtrusive mesh HUD
 * State loss protection
 
-##Requirements
+## Requirements
 * RLV or RLVa enabled for sit adjustments, else these buttons have no effect. No relay is needed.
 * ubODE physics for water resistance, on old physics engines swimming will be at flying speed.
 
-##Lite version
+## Lite version
 The lite version is even more optimized, but has no multiple stands or walks
