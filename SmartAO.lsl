@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-05-28
+   2021-06-03
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -393,7 +393,7 @@ default
             } else {
                 // stand up from fake groundsit and re-enable timer
                 NextStand();
-                if (llGetListLength(g_lStands) > 1) llSetTimerEvent(g_iStandTime);
+                if (llGetListLength(g_lAnimStanding) > 1) llSetTimerEvent(g_iStandTime);
             }
         } else if (iButton == 2) OptionDialog();
         else if (iButton == 4) {
