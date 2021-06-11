@@ -351,6 +351,10 @@ default
 {
     state_entry()
     {
+        if (llGetAttached()==0) {
+            Disable();
+            return;
+        }
         g_sTexture = llGetInventoryName(INVENTORY_TEXTURE, 0);
         llSetTexture(g_sTexture, ALL_SIDES);
         g_fWaterLevel = llWater(ZERO_VECTOR);
