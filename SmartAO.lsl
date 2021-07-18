@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-06-03
+   2021-07-18
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -559,7 +559,7 @@ default
 
     changed(integer iChange)
     {
-        //if (iChange & CHANGED_INVENTORY) llResetScript();
+        if (iChange & CHANGED_INVENTORY) Disable();
         if (iChange & CHANGED_REGION || iChange & CHANGED_TELEPORT) {
             g_fWaterLevel = llWater(ZERO_VECTOR);
             if (!(llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS)) llRequestPermissions(llGetOwner(), PERMISSION_OVERRIDE_ANIMATIONS);
