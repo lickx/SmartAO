@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-07-18
+   2021-07-19
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -49,6 +49,8 @@
 
  */
 
+key g_kOwner;
+
 list g_lAnimWalking;
 integer g_iCurrentWalk = 0;
 
@@ -68,6 +70,7 @@ integer g_iStandTime = 30;      // stand time in seconds
 integer g_iRandomStands = TRUE; // TRUE=random, FALSE=sequential
 integer g_iNextStandStart;
 integer g_iCurrentStand;
+string g_sLastStand;  // to recover to from coming out of suspending
 
 integer g_iEnabled = TRUE;
 integer g_iSitAnywhere = FALSE;
@@ -135,8 +138,9 @@ Fly2Swim()
 NextStand()
 {
     integer iNumStands = llGetListLength(g_lAnimStanding);
-    if (iNumStands <= 1) return;
-    if (g_iRandomStands) {
+    if (iNumStands == 0) return;
+    else if (iNumStands == 1) g_iCurrentStand = 0;
+    else if (g_iRandomStands) {
         g_iCurrentStand = llRound(llFrand(iNumStands-1));
     } else {
         if (g_iCurrentStand < iNumStands-1) g_iCurrentStand++;
@@ -144,40 +148,64 @@ NextStand()
     }
     string sAnim = llList2String(g_lAnimStanding, g_iCurrentStand);
     llSetAnimationOverride("Standing",sAnim);
+    g_sLastStand = sAnim;
+    if (g_iHoverInfo) llSetText(llList2String(g_lAnimStanding, g_iCurrentStand), <1,1,1>, 1);
     PickWalk();
 }
 
 PrevStand()
 {
     integer iNumStands = llGetListLength(g_lAnimStanding);
-    if (iNumStands <= 1) return;
     if (g_iRandomStands) {
         NextStand();
         return;
     }
-    if (g_iCurrentStand > 0) g_iCurrentStand--;
+    if (iNumStands == 0) return;
+    else if (iNumStands == 1) g_iCurrentStand = 0;
+    else if (g_iCurrentStand > 0) g_iCurrentStand--;
     else g_iCurrentStand = iNumStands-1;
     string sAnim = llList2String(g_lAnimStanding, g_iCurrentStand);
     llSetAnimationOverride("Standing",sAnim);
+    g_sLastStand = sAnim;
+    if (g_iHoverInfo) llSetText(llList2String(g_lAnimStanding, g_iCurrentStand), <1,1,1>, 1);
     PickWalk();
+}
+
+SpecificStand(string sAnim)
+{
+    integer idx = llListFindList(g_lAnimStanding, [sAnim]);
+    if (~idx) {
+        llSetAnimationOverride("Standing",sAnim);
+        g_iCurrentStand = idx;
+        g_sLastStand = sAnim;
+        if (g_iHoverInfo) llSetText(llList2String(g_lAnimStanding, g_iCurrentStand), <1,1,1>, 1);
+    } else {
+        NextStand();
+    }
 }
 
 PrevTestWalk()
 {
     integer iNumWalks = llGetListLength(g_lAnimWalking);
-    if (g_iCurrentWalk > 0) g_iCurrentWalk--;
+    if (iNumWalks == 0) return;
+    else if (iNumWalks == 1) g_iCurrentWalk = 0;
+    else if (g_iCurrentWalk > 0) g_iCurrentWalk--;
     else g_iCurrentWalk = iNumWalks-1;
     string sAnim = llList2String(g_lAnimWalking, g_iCurrentWalk);
     llSetAnimationOverride("Standing",sAnim);
+    if (g_iHoverInfo) llSetText("(Testing walks)\n"+llList2String(g_lAnimWalking, g_iCurrentWalk), <1,1,1>, 1);
 }
 
 NextTestWalk()
 {
     integer iNumWalks = llGetListLength(g_lAnimWalking);
-    if (g_iCurrentWalk < iNumWalks-1) g_iCurrentWalk++;
+    if (iNumWalks == 0) return;
+    else if (iNumWalks == 1) g_iCurrentWalk = 0;
+    else if (g_iCurrentWalk < iNumWalks-1) g_iCurrentWalk++;
     else g_iCurrentWalk = 0;
     string sAnim = llList2String(g_lAnimWalking, g_iCurrentWalk);
     llSetAnimationOverride("Standing",sAnim);
+    if (g_iHoverInfo) llSetText("(Testing walks)\n"+llList2String(g_lAnimWalking, g_iCurrentWalk), <1,1,1>, 1);
 }
 
 Enable()
@@ -208,10 +236,22 @@ Enable()
         else if (sAnim == "Swimming Up") g_iHaveSwimAnims = g_iHaveSwimAnims | 8;
         else if (~llListFindList(VALID_ANIMS, [sAnim])) llSetAnimationOverride(sAnim, sAnim);
     }
-    Swim2Fly();
-    NextStand();
-    llSetTimerEvent(g_iStandTime);
-    if (llGetListLength(g_lAnimWalking)) llSetAnimationOverride("Walking", llList2String(g_lAnimWalking, 0));
+
+    if (llGetListLength(g_lAnimStanding)) {
+        SpecificStand(g_sLastStand);
+        llSetTimerEvent(g_iStandTime);
+    }
+
+    if (llGetListLength(g_lAnimWalking)) {
+        PickWalk();
+        llSetTimerEvent(g_iStandTime);
+    }
+
+    float fWaterLevel = llWater(ZERO_VECTOR);
+    vector vPos = llGetPos();
+    if (g_iHaveFlyAnims && vPos.z >= fWaterLevel) Swim2Fly();
+    else if (g_iHaveSwimAnims) Fly2Swim();
+
     g_iEnabled = TRUE;
     VALID_ANIMS = []; // maybe needed for yEngine, free up list memory.
 }
@@ -279,8 +319,8 @@ DeleteDialog(string sAnim)
     llSetTimerEvent(0.0);
     g_sAnimToDelete = sAnim;
     g_iDialogChannel = -393939;
-    g_iDialogHandle = llListen(g_iDialogChannel, "", llGetOwner(), "");
-    llDialog(llGetOwner(), "Delete animation '"+g_sAnimToDelete+"'?", ["Delete", "Cancel"], g_iDialogChannel);
+    g_iDialogHandle = llListen(g_iDialogChannel, "", g_kOwner, "");
+    llDialog(g_kOwner, "Delete animation '"+g_sAnimToDelete+"'?", ["Delete", "Cancel"], g_iDialogChannel);
 }
 
 DeleteAnim(string sAnim)
@@ -289,13 +329,13 @@ DeleteAnim(string sAnim)
     if (iOwnerPerms & PERM_COPY)
         llRemoveInventory(sAnim);
     else
-        llGiveInventory(llGetOwner(), sAnim);
+        llGiveInventory(g_kOwner, sAnim);
 }
 
 OptionDialog()
 {
     g_iDialogChannel = -393939;
-    g_iDialogHandle = llListen(g_iDialogChannel, "", llGetOwner(), "");
+    g_iDialogHandle = llListen(g_iDialogChannel, "", g_kOwner, "");
     list lButtons;
     if (g_iTestingWalks) lButtons += "☑ Test Walks";
     else lButtons += "☐ Test Walks";
@@ -308,7 +348,7 @@ OptionDialog()
     if (g_iHoverInfo) lButtons += "☑ Hover Info";
     else lButtons += "☐ Hover Info";
     lButtons += ["15 sec.", "30 sec.", "45 sec."];
-    llDialog(llGetOwner(), "SmartAO Options", lButtons, g_iDialogChannel);
+    llDialog(g_kOwner, "SmartAO Options", lButtons, g_iDialogChannel);
 }
 
 RestoreSettings()
@@ -340,46 +380,54 @@ SaveSettings()
 PickWalk()
 {
     // Set up next walk
-    if (llGetListLength(g_lAnimWalking) > 1) {
-        integer iWalk = (integer)llFrand(llGetListLength(g_lAnimWalking));
-        string sNextWalk = llList2String(g_lAnimWalking, iWalk);
-        llSetAnimationOverride("Walking", sNextWalk);
-    }
+    integer iNumWalks = llGetListLength(g_lAnimWalking);
+    if (iNumWalks <= 1) return;
+    integer iWalk = (integer)llFrand(llGetListLength(g_lAnimWalking));
+    string sNextWalk = llList2String(g_lAnimWalking, iWalk);
+    llSetAnimationOverride("Walking", sNextWalk);
+}
+
+Init()
+{
+    g_kOwner = llGetOwner();
+    g_sTexture = llGetInventoryName(INVENTORY_TEXTURE, 0);
+    llSetTexture(g_sTexture, ALL_SIDES);
+    g_fWaterLevel = llWater(ZERO_VECTOR);
+    RestoreSettings();
+    if (llGetAttached()) llRequestPermissions(g_kOwner, PERMISSION_OVERRIDE_ANIMATIONS | PERMISSION_TAKE_CONTROLS);
+    g_iOpenCollar_CH = -llAbs((integer)("0x" + llGetSubString(g_kOwner,30,-1)));
+    llListen(g_iOpenCollar_CH, "", "", "");
+    if (g_iEnableLM) g_iLMHandle = llListen(LOCKMEISTER_CH, "", "", "");
+    g_iRlvHandle = llListen(RLV_CHANNEL, "", g_kOwner, "");
+    g_iRlvTimeout = llGetUnixTime() + 60;
+    llOwnerSay("@versionnew="+(string)RLV_CHANNEL);
 }
 
 default
 {
     state_entry()
     {
-        if (llGetAttached()==0) {
-            Disable();
-            return;
-        }
-        g_sTexture = llGetInventoryName(INVENTORY_TEXTURE, 0);
-        llSetTexture(g_sTexture, ALL_SIDES);
-        g_fWaterLevel = llWater(ZERO_VECTOR);
-        RestoreSettings();
-        if (llGetAttached()) llRequestPermissions(llGetOwner(), PERMISSION_OVERRIDE_ANIMATIONS | PERMISSION_TAKE_CONTROLS);
-        g_iOpenCollar_CH = -llAbs((integer)("0x" + llGetSubString(llGetOwner(),30,-1)));
-        llListen(g_iOpenCollar_CH, "", "", "");
-        if (g_iEnableLM) g_iLMHandle = llListen(LOCKMEISTER_CH, "", "", "");
-        g_iRlvHandle = llListen(RLV_CHANNEL, "", llGetOwner(), "");
-        g_iRlvTimeout = llGetUnixTime() + 60;
-        llOwnerSay("@versionnew="+(string)RLV_CHANNEL);
+        // Script lost state or has been reset/recompiled:
+        if (g_kOwner == NULL_KEY || g_kOwner == "") Init();
+    }
+
+    on_rez(integer i)
+    {
+        if (llGetAttached()) Init();
+        else Disable();
     }
     
     attach(key kID)
     {
         if (kID == NULL_KEY) llResetAnimationOverride("ALL");
-        else llResetScript();
     }
     
     touch_end(integer i)
     {
-        if (llDetectedKey(0) != llGetOwner()) return;
+        if (llDetectedKey(0) != g_kOwner) return;
         
         integer iButton = llDetectedTouchFace(0);
-        string sAnim = llGetAnimation(llGetOwner());
+        string sAnim = llGetAnimation(g_kOwner);
         if (iButton == 0) {
             // Power
             g_iEnabled = !g_iEnabled;
@@ -515,12 +563,12 @@ default
             llListenRemove(g_iDialogHandle);
             llSetTimerEvent(g_iStandTime);
         } else if (iChannel == LOCKMEISTER_CH) {
-            if (llGetSubString(sMsg,0,35) == llGetOwner()) {
+            if (llGetSubString(sMsg,0,35) == (string)g_kOwner) {
                 sMsg = llGetSubString(sMsg,36,-1);
                 if (sMsg == "booton") Enable();
                 else if (sMsg == "bootoff") Disable();
             } else return;
-        } else if (llGetOwnerKey(kID) != llGetOwner()) return;
+        } else if (llGetOwnerKey(kID) != g_kOwner) return;
         else if (iChannel == g_iOpenCollar_CH) {
             if(sMsg == "ZHAO_STANDON" || sMsg == "ZHAO_AOON") Enable();
             else if (sMsg == "ZHAO_STANDOFF" || sMsg == "ZHAO_AOOFF") Disable();
@@ -545,7 +593,7 @@ default
         }
 
         if (!g_iUsingSwimAnims) Fly2Swim();
-        string sCurAnim = llGetAnimation(llGetOwner());
+        string sCurAnim = llGetAnimation(g_kOwner);
         if (sCurAnim=="Walking" || sCurAnim=="Running") return;
         vector vMove = ZERO_VECTOR;
         if ( iLevels & ~iEdges & CONTROL_FWD) vMove.x += 1.0;
@@ -559,16 +607,16 @@ default
 
     changed(integer iChange)
     {
-        if (iChange & CHANGED_INVENTORY) Disable();
+        if ((iChange & CHANGED_INVENTORY) && g_iEnabled) Enable();
         if (iChange & CHANGED_REGION || iChange & CHANGED_TELEPORT) {
             g_fWaterLevel = llWater(ZERO_VECTOR);
-            if (!(llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS)) llRequestPermissions(llGetOwner(), PERMISSION_OVERRIDE_ANIMATIONS);
-            if (!(llGetPermissions() & PERMISSION_TAKE_CONTROLS)) llRequestPermissions(llGetOwner(), PERMISSION_TAKE_CONTROLS);
+            if (!(llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS)) llRequestPermissions(g_kOwner, PERMISSION_OVERRIDE_ANIMATIONS);
+            if (!(llGetPermissions() & PERMISSION_TAKE_CONTROLS)) llRequestPermissions(g_kOwner, PERMISSION_TAKE_CONTROLS);
         }
         if (g_iEnabled && (iChange & CHANGED_ANIMATION)) {
             // Note: never call llSetAnimationOverride in the changed event
             // or you'll get a recursive lag loop=crash
-            string sAnim = llGetAnimation(llGetOwner());
+            string sAnim = llGetAnimation(g_kOwner);
             if (sAnim == "Sitting on Ground") {
                 // Real groundsit
                 if (g_iRlvOn && g_fGroundsitHover != 0.0) {
@@ -633,7 +681,7 @@ default
     {
         // Switch stands after g_iStandTime seconds
         if (llGetUnixTime() >= g_iNextStandStart &&
-                llGetAnimation(llGetOwner()) == "Standing" &&
+                llGetAnimation(g_kOwner) == "Standing" &&
                 !g_iSitAnywhere && !g_iTestingWalks) {
             NextStand();
             PickWalk();  //because we will call this from the arrows too...
