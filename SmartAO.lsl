@@ -379,10 +379,11 @@ SaveSettings()
 
 PickWalk()
 {
-    // Set up next walk
     integer iNumWalks = llGetListLength(g_lAnimWalking);
-    if (iNumWalks <= 1) return;
-    integer iWalk = (integer)llFrand(llGetListLength(g_lAnimWalking));
+    integer iWalk;
+    if (iNumWalks == 0) return;
+    if (iNumWalks == 1) iWalk = 0;
+    else iWalk = (integer)llFrand(llGetListLength(g_lAnimWalking));
     string sNextWalk = llList2String(g_lAnimWalking, iWalk);
     llSetAnimationOverride("Walking", sNextWalk);
 }
