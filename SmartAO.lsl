@@ -353,7 +353,10 @@ OptionDialog()
 
 RestoreSettings()
 {
-    list lSettings = llParseString2List(llGetObjectDesc(), [",","="], []);
+    integer iLinkSettings = osGetLinkNumber("settings");
+    if (iLinkSettings == -1) return;
+    string sDesc = llGetLinkPrimitiveParams(iLinkSettings, [PRIM_DESC]);
+    list lSettings = llParseString2List(sDesc, [",","="], []);
     integer i;
     for (i = 0; i < llGetListLength(lSettings); i+=2)
     {
@@ -368,13 +371,15 @@ RestoreSettings()
 
 SaveSettings()
 {
+    integer iLinkSettings = osGetLinkNumber("settings");
+    if (iLinkSettings == -1) return;
     string sSettings;
     sSettings += "hover="+Hover2String(g_fGroundsitHover);
     sSettings += ",random="+(string)g_iRandomStands;
     sSettings += ",standtime="+(string)g_iStandTime;
     sSettings += ",info="+(string)g_iHoverInfo;
     sSettings += ",lm="+(string)g_iEnableLM;
-    llSetObjectDesc(sSettings);
+    llSetLinkPrimitiveParamsFast(iLinkSettings, [PRIM_DESC, sSettings]);
 }
 
 PickWalk()
