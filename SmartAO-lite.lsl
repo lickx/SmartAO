@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-05-30
+   2021-07-24
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -40,6 +40,7 @@
 
  */
 
+key g_kOwner;
 integer g_iRlvOn = 0;
 integer g_iRlvHandle;
 integer RLV_CHANNEL = 5050;
@@ -70,6 +71,11 @@ integer g_iDialogChannel;
 
 string g_sTexture;
 
+integer g_iLastMenu = 0;
+integer MENU_NONE = 0;
+integer MENU_STAND = 1;
+integer MENU_GROUNDSIT = 2;
+integer MENU_SIT = 3;
 string Hover2String(float fHover)
 {
     string sHover = (string)fHover;
@@ -110,8 +116,8 @@ Enable()
         "Landing", "PreJumping", "Running", "Sitting", "Sitting on Ground", "Standing",
         "Standing Up", "Striding", "Soft Landing", "Taking Off", "Turning Left",
         "Turning Right", "Walking"];
-    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_TEXTURE, 0, g_sTexture, <1,1,0>, <0,0.5,0>, 0]);
     llResetAnimationOverride("ALL");
+    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_TEXTURE, 0, g_sTexture, <1,1,0>, <0,0.5,0>, 0]);
     g_iHaveFlyAnims = 0;
     g_iHaveSwimAnims = 0;
     integer i = 0;
@@ -127,7 +133,12 @@ Enable()
         else if (sAnim == "Swimming Up") g_iHaveSwimAnims = g_iHaveSwimAnims | 8;
         else if (~llListFindList(VALID_ANIMS, [sAnim])) llSetAnimationOverride(sAnim, sAnim);
     }
-    Swim2Fly();
+
+    float fWaterLevel = llWater(ZERO_VECTOR);
+    vector vPos = llGetPos();
+    if (g_iHaveFlyAnims && vPos.z >= fWaterLevel) Swim2Fly();
+    else if (g_iHaveSwimAnims) Fly2Swim();
+
     g_iEnabled = TRUE;
     VALID_ANIMS = []; // maybe needed for yEngine, free up list memory.
 }
@@ -179,18 +190,21 @@ ShowSitMenu()
 OptionDialog()
 {
     g_iDialogChannel = -393939;
-    g_iDialogHandle = llListen(g_iDialogChannel, "", llGetOwner(), "");
+    g_iDialogHandle = llListen(g_iDialogChannel, "", g_kOwner, "");
     list lButtons;
     if (g_iEnableLM) lButtons += "☑ Lockmeister";
     else lButtons += "☐ Lockmeister";
     lButtons += "Reload";
     lButtons += "Close";
-    llDialog(llGetOwner(), "SmartAO Options", lButtons, g_iDialogChannel);
+    llDialog(g_kOwner, "SmartAO-lite Options", lButtons, g_iDialogChannel);
 }
 
 RestoreSettings()
 {
-    list lSettings = llParseString2List(llGetObjectDesc(), [",","="], []);
+    integer iLinkSettings = osGetLinkNumber("settings");
+    if (iLinkSettings == -1) return;
+    string sDesc = llGetLinkPrimitiveParams(iLinkSettings, [PRIM_DESC]);
+    list lSettings = llParseString2List(sDesc, [",","="], []);
     integer i;
     for (i = 0; i < llGetListLength(lSettings); i+=2)
     {
@@ -202,45 +216,54 @@ RestoreSettings()
 
 SaveSettings()
 {
+    integer iLinkSettings = osGetLinkNumber("settings");
+    if (iLinkSettings == -1) return;
     string sSettings;
     sSettings += "hover="+Hover2String(g_fGroundsitHover);
     sSettings += ",lm="+(string)g_iEnableLM;
-    llSetObjectDesc(sSettings);
+    llSetLinkPrimitiveParamsFast(iLinkSettings, [PRIM_DESC, sSettings]);
+}
+
+Init()
+{
+    g_kOwner = llGetOwner();
+    g_sTexture = llGetInventoryName(INVENTORY_TEXTURE, 0);
+    g_fWaterLevel = llWater(ZERO_VECTOR);
+    RestoreSettings();
+    if (llGetAttached()) llRequestPermissions(g_kOwner, PERMISSION_OVERRIDE_ANIMATIONS | PERMISSION_TAKE_CONTROLS);
+    g_iOpenCollar_CH = -llAbs((integer)("0x" + llGetSubString(g_kOwner,30,-1)));
+    llListen(g_iOpenCollar_CH, "", "", "");
+    if (g_iEnableLM) g_iLMHandle = llListen(LOCKMEISTER_CH, "", "", "");
+    g_iRlvHandle = llListen(RLV_CHANNEL, "", g_kOwner, "");
+    g_iRlvTimeout = llGetUnixTime() + 60;
+    llOwnerSay("@versionnew="+(string)RLV_CHANNEL);
 }
 
 default
 {
     state_entry()
     {
-        if (llGetAttached()==0) {
-            Disable();
-            return;
-        }
-        g_sTexture = llGetInventoryName(INVENTORY_TEXTURE, 0);
-        llSetTexture(g_sTexture, ALL_SIDES);
-        g_fWaterLevel = llWater(ZERO_VECTOR);
-        RestoreSettings();
-        if (llGetAttached()) llRequestPermissions(llGetOwner(), PERMISSION_OVERRIDE_ANIMATIONS | PERMISSION_TAKE_CONTROLS);
-        g_iOpenCollar_CH = -llAbs((integer)("0x" + llGetSubString(llGetOwner(),30,-1)));
-        llListen(g_iOpenCollar_CH, "", "", "");
-        if (g_iEnableLM) g_iLMHandle = llListen(LOCKMEISTER_CH, "", "", "");
-        g_iRlvHandle = llListen(RLV_CHANNEL, "", llGetOwner(), "");
-        g_iRlvTimeout = llGetUnixTime() + 60;
-        llOwnerSay("@versionnew="+(string)RLV_CHANNEL);
+        // Script lost state or has been reset/recompiled:
+        if (g_kOwner == NULL_KEY || g_kOwner == "") Init();
+    }
+
+    on_rez(integer i)
+    {
+        if (llGetAttached()) Init();
+        else Disable();
     }
     
     attach(key kID)
     {
         if (kID == NULL_KEY) llResetAnimationOverride("ALL");
-        else llResetScript();
     }
     
     touch_end(integer i)
     {
-        if (llDetectedKey(0) != llGetOwner()) return;
+        if (llDetectedKey(0) != g_kOwner) return;
         
         integer iButton = llDetectedTouchFace(0);
-        string sAnim = llGetAnimation(llGetOwner());
+        string sAnim = llGetAnimation(g_kOwner);
         if (iButton == 0) {
             // Power
             g_iEnabled = !g_iEnabled;
@@ -329,12 +352,12 @@ default
             SaveSettings();
             llListenRemove(g_iDialogHandle);
         } else if (iChannel == LOCKMEISTER_CH) {
-            if (llGetSubString(sMsg,0,35) == llGetOwner()) {
+            if (llGetSubString(sMsg,0,35) == g_kOwner) {
                 sMsg = llGetSubString(sMsg,36,-1);
                 if (sMsg == "booton") Enable();
                 else if (sMsg == "bootoff") Disable();
             } else return;
-        } else if (llGetOwnerKey(kID) != llGetOwner()) return;
+        } else if (llGetOwnerKey(kID) != g_kOwner) return;
         else if (iChannel == g_iOpenCollar_CH) {
             if(sMsg == "ZHAO_STANDON" || sMsg == "ZHAO_AOON") Enable();
             else if (sMsg == "ZHAO_STANDOFF" || sMsg == "ZHAO_AOOFF") Disable();
@@ -359,7 +382,7 @@ default
         }
 
         if (!g_iUsingSwimAnims) Fly2Swim();
-        string sCurAnim = llGetAnimation(llGetOwner());
+        string sCurAnim = llGetAnimation(g_kOwner);
         if (sCurAnim=="Walking" || sCurAnim=="Running") return;
         vector vMove = ZERO_VECTOR;
         if ( iLevels & ~iEdges & CONTROL_FWD) vMove.x += 1.0;
@@ -373,14 +396,14 @@ default
 
     changed(integer iChange)
     {
-        if (iChange & CHANGED_INVENTORY) Disable();
+        if (iChange & CHANGED_INVENTORY && g_iEnabled) Enable();
         if (iChange & CHANGED_REGION || iChange & CHANGED_TELEPORT) {
             g_fWaterLevel = llWater(ZERO_VECTOR);
-            if (!(llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS)) llRequestPermissions(llGetOwner(), PERMISSION_OVERRIDE_ANIMATIONS);
-            if (!(llGetPermissions() & PERMISSION_TAKE_CONTROLS)) llRequestPermissions(llGetOwner(), PERMISSION_TAKE_CONTROLS);
+            if (!(llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS)) llRequestPermissions(g_kOwner, PERMISSION_OVERRIDE_ANIMATIONS);
+            if (!(llGetPermissions() & PERMISSION_TAKE_CONTROLS)) llRequestPermissions(g_kOwner, PERMISSION_TAKE_CONTROLS);
         }
         if (g_iEnabled && (iChange & CHANGED_ANIMATION)) {
-            string sAnim = llGetAnimation(llGetOwner());
+            string sAnim = llGetAnimation(g_kOwner);
             if (sAnim == "Sitting on Ground") {
                 // Real groundsit
                 if (g_iRlvOn && g_fGroundsitHover != 0.0) {
@@ -399,7 +422,7 @@ default
             } else if (sAnim == "Standing") {
                 if (g_iSitAnywhere) {
                     // Fake groundsit (actually playing the anim while standing)
-                    if (g_iRlvOn && g_fGroundSitHover != 0.0) {
+                    if (g_iRlvOn && g_fGroundsitHover != 0.0) {
                         llOwnerSay("@adjustheight:1;0;"+(string)g_fGroundsitHover+"=force");
                         g_iHoverAdjusted = TRUE;
                     }
@@ -410,11 +433,12 @@ default
                         llOwnerSay("@adjustheight:1;0;0.0=force");
                         g_iHoverAdjusted = FALSE;
                     }
-                    if (g_LastMenu != MENU_HIDE) HideMenu();
+                    if (g_iLastMenu != MENU_NONE) HideMenu();
                 }
             } else {
                 // All other anim states
                 if (g_iLastMenu != MENU_NONE) HideMenu();
+            }
         }
     }
 
