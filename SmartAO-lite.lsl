@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-07-24
+   2021-08-03
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -132,6 +132,11 @@ Enable()
         else if (sAnim == "Swimming Down") g_iHaveSwimAnims = g_iHaveSwimAnims | 4;
         else if (sAnim == "Swimming Up") g_iHaveSwimAnims = g_iHaveSwimAnims | 8;
         else if (~llListFindList(VALID_ANIMS, [sAnim])) llSetAnimationOverride(sAnim, sAnim);
+    }
+
+    if (llGetAnimation(g_kOwner) != "Sitting") {
+        llOwnerSay("@adjustheight:1;0;0.0=force");
+        g_iHoverAdjusted = FALSE;
     }
 
     float fWaterLevel = llWater(ZERO_VECTOR);
@@ -352,7 +357,7 @@ default
             SaveSettings();
             llListenRemove(g_iDialogHandle);
         } else if (iChannel == LOCKMEISTER_CH) {
-            if (llGetSubString(sMsg,0,35) == g_kOwner) {
+            if (llGetSubString(sMsg,0,35) == (string)g_kOwner) {
                 sMsg = llGetSubString(sMsg,36,-1);
                 if (sMsg == "booton") Enable();
                 else if (sMsg == "bootoff") Disable();
@@ -396,7 +401,7 @@ default
 
     changed(integer iChange)
     {
-        if (iChange & CHANGED_INVENTORY && g_iEnabled) Enable();
+        if ((iChange & CHANGED_INVENTORY) && g_iEnabled) Enable();
         if (iChange & CHANGED_REGION || iChange & CHANGED_TELEPORT) {
             g_fWaterLevel = llWater(ZERO_VECTOR);
             if (!(llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS)) llRequestPermissions(g_kOwner, PERMISSION_OVERRIDE_ANIMATIONS);
@@ -436,6 +441,10 @@ default
                     if (g_iLastMenu != MENU_NONE) HideMenu();
                 }
             } else {
+                if (g_iRlvOn && g_iHoverAdjusted) {
+                    llOwnerSay("@adjustheight:1;0;0.0=force");
+                    g_iHoverAdjusted = FALSE;
+                }
                 // All other anim states
                 if (g_iLastMenu != MENU_NONE) HideMenu();
             }

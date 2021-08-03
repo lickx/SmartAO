@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-07-19
+   2021-08-03
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -235,6 +235,11 @@ Enable()
         else if (sAnim == "Swimming Down") g_iHaveSwimAnims = g_iHaveSwimAnims | 4;
         else if (sAnim == "Swimming Up") g_iHaveSwimAnims = g_iHaveSwimAnims | 8;
         else if (~llListFindList(VALID_ANIMS, [sAnim])) llSetAnimationOverride(sAnim, sAnim);
+    }
+
+    if (llGetAnimation(g_kOwner) != "Sitting") {
+        llOwnerSay("@adjustheight:1;0;0.0=force");
+        g_iHoverAdjusted = FALSE;
     }
 
     if (llGetListLength(g_lAnimStanding)) {
