@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-08-04
+   2021-08-10
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -208,7 +208,7 @@ RestoreSettings()
 {
     integer iLinkSettings = osGetLinkNumber("settings");
     if (iLinkSettings == -1) return;
-    string sDesc = llGetLinkPrimitiveParams(iLinkSettings, [PRIM_DESC]);
+    string sDesc = llList2String(llGetLinkPrimitiveParams(iLinkSettings, [PRIM_DESC]), 0);
     list lSettings = llParseString2List(sDesc, [",","="], []);
     integer i;
     for (i = 0; i < llGetListLength(lSettings); i+=2)
@@ -390,11 +390,11 @@ default
         string sCurAnim = llGetAnimation(g_kOwner);
         if (sCurAnim=="Walking" || sCurAnim=="Running") return;
         vector vMove = ZERO_VECTOR;
-        if ( iLevels & ~iEdges & CONTROL_FWD) vMove.x += 1.5;
-        if ( iLevels & ~iEdges & CONTROL_BACK) vMove.x += -1.5;
+        if ( iLevels & ~iEdges & CONTROL_FWD) vMove.x += 1.0;
+        if ( iLevels & ~iEdges & CONTROL_BACK) vMove.x += -1.0;
         if ( iLevels & ~iEdges & CONTROL_UP) vMove.z += 0.8;
         if ( iLevels & ~iEdges & CONTROL_DOWN) vMove.z += -0.2;
-        vMove.z += -0.2; // gravity
+        vMove.z += -0.3; // gravity
         if (sCurAnim=="Hovering Down") vMove.z = 0; // hack to avoid ground bouncing
         if (vMove != ZERO_VECTOR) llApplyImpulse((vMove*llGetRot()), FALSE);
     }

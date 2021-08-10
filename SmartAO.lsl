@@ -1,7 +1,7 @@
 
 /*
    SmartAO by lickx
-   2021-08-04
+   2021-08-10
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -360,7 +360,7 @@ RestoreSettings()
 {
     integer iLinkSettings = osGetLinkNumber("settings");
     if (iLinkSettings == -1) return;
-    string sDesc = llGetLinkPrimitiveParams(iLinkSettings, [PRIM_DESC]);
+    string sDesc = llList2String(llGetLinkPrimitiveParams(iLinkSettings, [PRIM_DESC]), 0);
     list lSettings = llParseString2List(sDesc, [",","="], []);
     integer i;
     for (i = 0; i < llGetListLength(lSettings); i+=2)
