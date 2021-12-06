@@ -1,7 +1,7 @@
-
+ 
 /*
    SmartAO by lickx
-   2021-08-10
+   2021-12-06
   
    Just drop in animations in the HUD. No notecard needed.
    Accepted animations (others will simply be ignored):
@@ -150,7 +150,6 @@ NextStand()
     llSetAnimationOverride("Standing",sAnim);
     g_sLastStand = sAnim;
     if (g_iHoverInfo) llSetText(llList2String(g_lAnimStanding, g_iCurrentStand), <1,1,1>, 1);
-    PickWalk();
 }
 
 PrevStand()
@@ -168,7 +167,6 @@ PrevStand()
     llSetAnimationOverride("Standing",sAnim);
     g_sLastStand = sAnim;
     if (g_iHoverInfo) llSetText(llList2String(g_lAnimStanding, g_iCurrentStand), <1,1,1>, 1);
-    PickWalk();
 }
 
 SpecificStand(string sAnim)
@@ -694,8 +692,8 @@ default
         if (llGetUnixTime() >= g_iNextStandStart &&
                 llGetAnimation(g_kOwner) == "Standing" &&
                 !g_iSitAnywhere && !g_iTestingWalks) {
-            NextStand();
-            PickWalk();  //because we will call this from the arrows too...
+            if (llGetListLength(g_lAnimStanding) > 1) NextStand();
+            if (llGetListLength(g_lAnimWalking) > 1) PickWalk();  //because we will call this from the arrows too...
         }
         if (g_iRlvTimeout) {
             if (llGetUnixTime() >= g_iRlvTimeout) {
